@@ -7,18 +7,37 @@ use Junges\Kafka\Facades\Kafka;
 use Mockery;
 use Modules\Kafka\Actions\KafkaOutboxPublisher;
 use Modules\Kafka\Enums\KafkaOutboxStatus;
+use Modules\Kafka\Jobs\PublishKafkaOutboxMessage;
 use Modules\Kafka\Models\KafkaOutboxMessage;
 use RuntimeException;
 use Tests\TestCase;
 
 class KafkaOutboxPublisherTest extends TestCase
 {
-    public function test_publish_stores_outbox_message_and_marks_it_sent(): void
+    public function test_publish_stores_pending_outbox_message(): void
     {
+        app(KafkaOutboxPublisher::class)->publish('test.topic', ['id' => 123]);
+
+        $this->assertDatabaseHas('kafka_outbox_messages', [
+            'topic' => 'testing.test.topic',
+            'status' => KafkaOutboxStatus::PENDING,
+            'attempts' => 0,
+        ]);
+    }
+
+    public function test_publish_job_marks_outbox_message_sent(): void
+    {
+        $message = KafkaOutboxMessage::create([
+            'topic' => 'testing.test.topic',
+            'payload' => ['id' => 123],
+            'status' => KafkaOutboxStatus::PENDING,
+            'available_at' => now()->subSecond(),
+        ]);
+
         $producer = Mockery::mock(MessageProducer::class);
         $producer->shouldReceive('onTopic')
             ->once()
-            ->with('test.topic')
+            ->with('testing.test.topic')
             ->andReturnSelf();
         $producer->shouldReceive('withBody')
             ->once()
@@ -32,10 +51,10 @@ class KafkaOutboxPublisherTest extends TestCase
             ->once()
             ->andReturn($producer);
 
-        app(KafkaOutboxPublisher::class)->publish('test.topic', ['id' => 123]);
+        (new PublishKafkaOutboxMessage($message->id))->handle();
 
         $this->assertDatabaseHas('kafka_outbox_messages', [
-            'topic' => 'test.topic',
+            'topic' => 'testing.test.topic',
             'status' => KafkaOutboxStatus::SENT,
             'attempts' => 0,
         ]);
@@ -47,10 +66,17 @@ class KafkaOutboxPublisherTest extends TestCase
             ->once()
             ->andThrow(new RuntimeException('Kafka unavailable'));
 
-        app(KafkaOutboxPublisher::class)->publish('test.topic', ['id' => 123]);
+        $message = KafkaOutboxMessage::create([
+            'topic' => 'testing.test.topic',
+            'payload' => ['id' => 123],
+            'status' => KafkaOutboxStatus::PENDING,
+            'available_at' => now()->subSecond(),
+        ]);
+
+        (new PublishKafkaOutboxMessage($message->id))->handle();
 
         $this->assertDatabaseHas('kafka_outbox_messages', [
-            'topic' => 'test.topic',
+            'topic' => 'testing.test.topic',
             'status' => KafkaOutboxStatus::PENDING,
             'attempts' => 1,
             'last_error' => 'Kafka unavailable',
@@ -62,7 +88,7 @@ class KafkaOutboxPublisherTest extends TestCase
         $producer = Mockery::mock(MessageProducer::class);
         $producer->shouldReceive('onTopic')
             ->once()
-            ->with('test.topic')
+            ->with('testing.test.topic')
             ->andReturnSelf();
         $producer->shouldReceive('withBody')
             ->once()
@@ -77,7 +103,7 @@ class KafkaOutboxPublisherTest extends TestCase
             ->andReturn($producer);
 
         KafkaOutboxMessage::create([
-            'topic' => 'test.topic',
+            'topic' => 'testing.test.topic',
             'payload' => ['id' => 123],
             'status' => KafkaOutboxStatus::PENDING,
             'available_at' => now()->subSecond(),
@@ -88,7 +114,7 @@ class KafkaOutboxPublisherTest extends TestCase
             ->assertSuccessful();
 
         $this->assertDatabaseHas('kafka_outbox_messages', [
-            'topic' => 'test.topic',
+            'topic' => 'testing.test.topic',
             'status' => KafkaOutboxStatus::SENT,
         ]);
     }

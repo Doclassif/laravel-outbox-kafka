@@ -14,7 +14,7 @@ class KafkaOutboxMessageModelTest extends TestCase
 
         $this->assertDatabaseHas('kafka_outbox_messages', [
             'id' => $message->id,
-            'topic' => config('kafka.topic_prefix', app()->environment()).'.'.$message->topic,
+            'topic' => $message->topic,
             'status' => KafkaOutboxStatus::PENDING->value,
             'attempts' => 0,
         ]);
