@@ -3,6 +3,7 @@
 namespace Modules\Kafka\Console;
 
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Log;
 use Junges\Kafka\Facades\Kafka;
 
 abstract class KafkaConsumer extends Command
@@ -37,6 +38,11 @@ abstract class KafkaConsumer extends Command
         {
             return config('kafka.topic_prefix', app()->environment()).'.'.$item;
         }, $this->topics());
+
+        Log::info('Starting consumer', [
+            'handler' => $handlerClass,
+            'topics' => $topics,
+        ]);
 
         Kafka::consumer()
             ->subscribe($topics)
