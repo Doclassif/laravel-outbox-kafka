@@ -39,10 +39,11 @@ abstract class KafkaConsumer extends Command
             return config('kafka.topic_prefix', app()->environment()).'.'.$item;
         }, $this->topics());
 
-        Log::info('Starting consumer', [
-            'handler' => $handlerClass,
-            'topics' => $topics,
-        ]);
+
+        $this->info('Starting consumer');
+
+        $this->line('Handler: '.$handlerClass);
+        $this->line('Topics: '.implode(', ', $topics));
 
         Kafka::consumer()
             ->subscribe($topics)
