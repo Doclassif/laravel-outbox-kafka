@@ -24,23 +24,32 @@ class PublishKafkaOutboxMessage implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return (string) self::class.'-'.$this->messageId;
+        return (string) self::class .'-'.$this->messageId;
     }
 
     public function handle(): void
     {
         $message = KafkaOutboxMessage::find($this->messageId);
 
-        if (! $message || $message->status === KafkaOutboxStatus::SENT) {
+        if (! $message || $message->status === KafkaOutboxStatus::SENT)
+        {
             return;
         }
 
-        try {
+        try
+        {
             $producer = Kafka::publish()
+                ->withSasl(
+                    config('kafka.sasl.username'),
+                    config('kafka.sasl.password'),
+                    config('kafka.sasl.mechanisms', 'PLAINTEXT'),
+                    config('kafka.securityProtocol', 'PLAINTEXT')
+                )
                 ->onTopic($message->topic)
                 ->withBody($message->payload);
 
-            if ($message->key !== null) {
+            if ($message->key !== null)
+            {
                 $producer->withKafkaKey($message->key);
             }
 
@@ -51,7 +60,9 @@ class PublishKafkaOutboxMessage implements ShouldBeUnique, ShouldQueue
                 'last_error' => null,
                 'sent_at' => now(),
             ])->save();
-        } catch (Throwable $exception) {
+        }
+        catch (Throwable $exception)
+        {
             $message->forceFill([
                 'attempts' => $message->attempts + 1,
                 'last_error' => mb_substr($exception->getMessage(), 0, 65535),
