@@ -30,6 +30,17 @@ abstract class KafkaConsumer extends Command
         return config('kafka.consumer_group_id');
     }
 
+    protected function offset(): string
+    {
+        return 'earliest';
+    }
+
+    protected function consumerOptions(): array
+    {
+        return [];
+    }
+
+
     public function handle(): int
     {
         $handlerClass = $this->handler();
@@ -51,6 +62,10 @@ abstract class KafkaConsumer extends Command
             ->withConsumerGroupId($this->groupId())
             ->withBrokers($this->brokers())
             ->withAutoCommit($this->autoCommit())
+            ->withOptions([
+                'auto.offset.reset' => $this->offset(),
+                ...$this->consumerOptions(),
+            ])
             ->withSasl(
                 config('kafka.sasl.username'),
                 config('kafka.sasl.password'),
